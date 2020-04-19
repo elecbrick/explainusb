@@ -38,19 +38,19 @@ StandardRequest = {
     11: "SET_INTERFACE",        # 11 0-byte write - select alternate setting
     12: "SYNCH_FRAME",          # 12 2-byte frame number in data
     # Requests below this point are USB 3 specific
-    13: "SET_ENCRYPTION"
-    14: "GET_ENCRYPTION"
-    15: "SET_HANDSHAKE"
-    16: "GET_HANDSHAKE"
-    17: "SET_CONNECTION"
-    18: "SET_SECURITY_DATA"
-    19: "GET_SECURITY_DATA"
-    20: "SET_WUSB_DATA"
-    21: "LOOPBACK_DATA_WRITE"
-    22: "LOOPBACK_DATA_READ"
-    23: "SET_INTERFACE_DS"
-    48: "SET_SEL"
-    49: "SET_ISOCH_DELAY"
+    13: "SET_ENCRYPTION",
+    14: "GET_ENCRYPTION",
+    15: "SET_HANDSHAKE",
+    16: "GET_HANDSHAKE",
+    17: "SET_CONNECTION",
+    18: "SET_SECURITY_DATA",
+    19: "GET_SECURITY_DATA",
+    20: "SET_WUSB_DATA",
+    21: "LOOPBACK_DATA_WRITE",
+    22: "LOOPBACK_DATA_READ",
+    23: "SET_INTERFACE_DS",
+    48: "SET_SEL",
+    49: "SET_ISOCH_DELAY",
 }
 
 # Table 9-5. Descriptor Types
@@ -63,12 +63,12 @@ DescriptorType = {
     0x06: "DEVICE_QUALIFIER",
     0x07: "OTHER_SPEED_CONFIGURATION",
     0x08: "INTERFACE_POWER",
-    0x0F: "BOS"
-    0x10: "DEVICE_CAPABILITY"
-    # HID = 0x21, REPORT = 0x22, PHYSICAL = 0x23, HUB = 0x29
-    # SUPERSPEED_HUB = 0x2a
-    0x30: "SS_ENDPOINT_COMPANION"
-    0x31: "SSP_ISOCHRONOUS_ENDPOINT_COMPANION"
+    0x0F: "BOS",
+    0x10: "DEVICE_CAPABILITY",
+    # HID = 0x21, REPORT = 0x22, PHYSICAL = 0x23, HUB = 0x29,
+    # SUPERSPEED_HUB = 0x2a,
+    0x30: "SS_ENDPOINT_COMPANION",
+    0x31: "SSP_ISOCHRONOUS_ENDPOINT_COMPANION",
 }
 
 # Table 9-6. Standard Feature Selectors
@@ -78,16 +78,16 @@ FeatureSelector = {             # Recipient
     2: "TEST_MODE",             # Device
     # Requests below this point are USB 3 specific
     #0 "FUNCTION_SUSPEND",      # Interface - USB 3 makes alternate use of 0
-    3: "b_hnp_enable"           # Device
-    4: "a_hnp_support"          # Device
-    5: "a_alt_hnp_support"      # Device
-    6: "WUSB_DEVICE"            # Device
-    48: "U1_ENABLE"             # Device
-    49: "U2_ENABLE"             # Device
-    50: "LTM_ENABLE"            # Device
-    51: "B3_NTF_HOST_REL"       # Device
-    52: "B3_RSP_ENABLE"         # Device
-    53: "LDM_ENABLE"            # Device
+    3: "b_hnp_enable",          # Device
+    4: "a_hnp_support",         # Device
+    5: "a_alt_hnp_support",     # Device
+    6: "WUSB_DEVICE",           # Device
+    48: "U1_ENABLE",            # Device
+    49: "U2_ENABLE",            # Device
+    50: "LTM_ENABLE",           # Device
+    51: "B3_NTF_HOST_REL",      # Device
+    52: "B3_RSP_ENABLE",        # Device
+    53: "LDM_ENABLE",           # Device
    }
 
 # Figure 9-4. Information Returned by a GetStatus() Request to a Device
