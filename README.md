@@ -36,7 +36,9 @@ Standard descriptors are supported along with a few others at the moment.
 In particular, HID and mass storage are works in progress.
 
 ## Usage:
-`from explainusb import Analyze`
+```Python
+from explainusb import Analyze
+```
 
 In order to decode incomming packets correctly, outgoing packets should call:
 ```Python
