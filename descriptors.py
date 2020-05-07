@@ -1,57 +1,57 @@
-#!/usr/bin/python3
+#!/usr/bin/python3.6
+# -*- coding: utf-8 -*-
 
+'''
+Copyright (c) 2020, Doug Eaton
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+'''
+
+
+from cocotb.log import SimLog
+import logging
 from array import array
+from struct import unpack
 
-# Table 9-3. Standard Device Requests
-'''
-Format of SETUP packet that issues these requests is provided for reference
-Handling of the SETUP packet is out of the scope of this module
+logger = SimLog("cocotb.usb.descriptors")
+#logger.setLevel(logging.DEBUG)
 
-bmRequestType bRequest          wValue      wIndex        wLength Data
-000000xxB     CLEAR_FEATURE     FeatSelect  Zero If Ep    Zero    None
-10000000B     GET_CONFIGURATION Zero        Zero          One     Config Value
-10000000B     GET_DESCRIPTOR    Type+Index  Lang ID       Length  Descriptor
-10000001B     GET_INTERFACE     Zero        Interface     One     Alt IF
-100000xxB     GET_STATUS        Zero        Zero If Ep    Two     Dev If or Ep
-00000000B     SET_ADDRESS       Device Addr Zero          Zero    None
-00000000B     SET_CONFIGURATION Config Val  Zero          Zero    None
-00000000B     SET_DESCRIPTOR    Type+Index  Lang ID       Length  Descriptor
-000000xxB     SET_FEATURE       FeatSel     TestSel+0IfEp Zero    None
-00000001B     SET_INTERFACE     Alt Setting Interface     Zero    None
-10000010B     SYNCH_FRAME       Zero        Endpoint      Two     Frame Number
-'''
+class USBProtocolState():
+    # A control pipe may have a variable-length data phase in which the host
+    # requests more data than is contained in the specified data structure.
+    # When all of the data structure is returned to the host, the function
+    # should indicate that the Data stage is ended by returning a packet that
+    # is shorter than the MaxPacketSize for the pipe. If the data structure
+    # is an exact multiple of wMaxPacketSize for the pipe, the function will
+    # return a zero-length packet to indicate the end of the Data stage.
+    variable_length_data_remaining=0
+    def set_variable_length_remaining(x):
+        USBProtocolState.variable_length_data_remaining=x
+    def get_variable_length_remaining():
+        return USBProtocolState.variable_length_data_remaining
+    def in_variable_length_data_stage():
+        return USBProtocolState.variable_length_data_remaining>0
 
-# Table 9-4. Standard Request Codes
-# bRequest Value
-StandardRequest = {
-    0: "GET_STATUS",            # 0  2-byte read, see Figure 9-4, 9-5, 9-6
-    1: "CLEAR_FEATURE",         # 1  0-byte write, feature selected by wValue
-    2: "RFU2",                  # 2  
-    3: "SET_FEATURE",           # 3  0-byte write, feature selected by wValue
-    4: "RFU4",                  # 4  
-    5: "SET_ADDRESS",           # 5  0-byte write, address in wValue
-    6: "GET_DESCRIPTOR",        # 6  wLength-byte read, type & index in wValue
-    7: "SET_DESCRIPTOR",        # 7  wLength-byte write, type & index in wValue
-    8: "GET_CONFIGURATION",     # 8  1-byte read, config selected by wValue
-    9: "SET_CONFIGURATION",     # 9  0-byte write, config selected by wValue
-    10: "GET_INTERFACE",        # 10 returns alternate setting for interface
-    11: "SET_INTERFACE",        # 11 0-byte write - select alternate setting
-    12: "SYNCH_FRAME",          # 12 2-byte frame number in data
-    # Requests below this point are USB 3 specific
-    13: "SET_ENCRYPTION",
-    14: "GET_ENCRYPTION",
-    15: "SET_HANDSHAKE",
-    16: "GET_HANDSHAKE",
-    17: "SET_CONNECTION",
-    18: "SET_SECURITY_DATA",
-    19: "GET_SECURITY_DATA",
-    20: "SET_WUSB_DATA",
-    21: "LOOPBACK_DATA_WRITE",
-    22: "LOOPBACK_DATA_READ",
-    23: "SET_INTERFACE_DS",
-    48: "SET_SEL",
-    49: "SET_ISOCH_DELAY",
-}
 
 # Table 9-5. Descriptor Types
 DescriptorType = {
@@ -65,10 +65,14 @@ DescriptorType = {
     0x08: "INTERFACE_POWER",
     0x0F: "BOS",
     0x10: "DEVICE_CAPABILITY",
-    # HID = 0x21, REPORT = 0x22, PHYSICAL = 0x23, HUB = 0x29,
-    # SUPERSPEED_HUB = 0x2a,
-    0x30: "SS_ENDPOINT_COMPANION",
-    0x31: "SSP_ISOCHRONOUS_ENDPOINT_COMPANION",
+    0x21: "DFU",
+    # 0x21: "HID",  # Class
+    # 0x22: "REPORT",   # get_descriptor to INTERFACE with wValue HIGH 0x22
+    # 0x23: "PHYSICAL", # get_descriptor to INTERFACE with wValue HIGH 0x23
+    # 0x29: "HUB",
+    # 0x2a: "SUPERSPEED_HUB",
+    # 0x30: "SS_ENDPOINT_COMPANION",
+    # 0x31: "SSP_ISOCHRONOUS_ENDPOINT_COMPANION",
 }
 
 # Table 9-6. Standard Feature Selectors
@@ -89,24 +93,6 @@ FeatureSelector = {             # Recipient
     52: "B3_RSP_ENABLE",        # Device
     53: "LDM_ENABLE",           # Device
    }
-
-# Figure 9-4. Information Returned by a GetStatus() Request to a Device
-GetStatusDevice = {
-    # D15-D2 Reserved
-    1: "Remote Wakeup",
-    0: "Self Powered",
-}
-
-# Figure 9-5. Information Returned by a GetStatus() Request to an Interface
-GetStatusInterface = {
-    # D15-D0 Reserved
-}
-
-# Figure 9-6. Information Returned by a GetStatus() Request to an Endpoint
-GetStatusEndpoint = {
-    # D15-D1 Reserved
-    0: "Halt",
-}
 
 # Table 9-7. Test Mode Selectors
 TestModeSelectors = {
@@ -135,8 +121,19 @@ def flag(b):
 def mA(s):
     return f'{s*2}mA'
 
-def u16string(s):
-    pass
+def tf(b):
+    return True if b else False
+
+def u16string(s, zero):
+    # String descriptor zero returns a different value than all others
+    # according to spec so assume first string returned will
+    # be a language list
+    logger.debug(f"String descriptor zero: {zero}")
+    if zero:
+        return list(map(lambda x: LangID[x], unpack(f"<{len(s)//2}H", s)))
+    else:
+        return str(s.decode(encoding="utf-16-le").encode(encoding="ascii",
+                errors="backslashreplace"))
 
 
 # Table 9-8. Standard Device Descriptor
@@ -240,12 +237,164 @@ MaxPacketSize = (
     (0b11, "reserved"),
 )
 
+LangID = {
+    0x0000: "no language specified",
+    0x0401: "Arabic (Saudi Arabia)",
+    0x0402: "Bulgarian",
+    0x0403: "Catalan",
+    0x0404: "Chinese (Taiwan)",
+    0x0405: "Czech",
+    0x0406: "Danish",
+    0x0407: "German (Standard)",
+    0x0408: "Greek",
+    0x0409: "English (United States)",
+    0x040a: "Spanish (Traditional Sort)",
+    0x040b: "Finnish",
+    0x040c: "French (Standard)",
+    0x040d: "Hebrew",
+    0x040e: "Hungarian",
+    0x040f: "Icelandic",
+    0x0410: "Italian (Standard)",
+    0x0411: "Japanese",
+    0x0412: "Korean",
+    0x0413: "Dutch (Netherlands)",
+    0x0414: "Norwegian (Bokmal)",
+    0x0415: "Polish",
+    0x0416: "Portuguese (Brazil)",
+    0x0418: "Romanian",
+    0x0419: "Russian",
+    0x041a: "Croatian",
+    0x041b: "Slovak",
+    0x041c: "Albanian",
+    0x041d: "Swedish",
+    0x041e: "Thai",
+    0x041f: "Turkish",
+    0x0420: "Urdu (Pakistan)",
+    0x0421: "Indonesian",
+    0x0422: "Ukrainian",
+    0x0423: "Belarussian",
+    0x0424: "Slovenian",
+    0x0425: "Estonian",
+    0x0426: "Latvian",
+    0x0427: "Lithuanian",
+    0x0429: "Farsi",
+    0x042a: "Vietnamese",
+    0x042b: "Armenian",
+    0x042c: "Azeri (Latin)",
+    0x042d: "Basque",
+    0x042f: "Macedonian",
+    0x0430: "Sutu",
+    0x0436: "Afrikaans",
+    0x0437: "Georgian",
+    0x0438: "Faeroese",
+    0x0439: "Hindi",
+    0x043e: "Malay (Malaysian)",
+    0x043f: "Kazakh",
+    0x0441: "Swahili (Kenya)",
+    0x0443: "Uzbek (Latin)",
+    0x0444: "Tatar (Tatarstan)",
+    0x0445: "Bengali",
+    0x0446: "Punjabi",
+    0x0447: "Gujarati",
+    0x0448: "Oriya",
+    0x0449: "Tamil",
+    0x044a: "Telugu",
+    0x044b: "Kannada",
+    0x044c: "Malayalam",
+    0x044d: "Assamese",
+    0x044e: "Marathi",
+    0x044f: "Sanskrit",
+    0x0455: "Burmese",
+    0x0457: "Konkani",
+    0x0458: "Manipuri",
+    0x0459: "Sindhi",
+    0x04ff: "HID (Usage Data Descriptor)",
+    0x0801: "Arabic (Iraq)",
+    0x0804: "Chinese (PRC)",
+    0x0807: "German (Switzerland)",
+    0x0809: "English (United Kingdom)",
+    0x080a: "Spanish (Mexican)",
+    0x080c: "French (Belgian)",
+    0x0810: "Italian (Switzerland)",
+    0x0812: "Korean (Johab)",
+    0x0813: "Dutch (Belgium)",
+    0x0814: "Norwegian (Nynorsk)",
+    0x0816: "Portuguese (Standard)",
+    0x081a: "Serbian (Latin)",
+    0x081d: "Swedish (Finland)",
+    0x0820: "Urdu (India)",
+    0x0827: "Lithuanian (Classic)",
+    0x082c: "Azeri (Cyrillic)",
+    0x083e: "Malay (Brunei Darussalam)",
+    0x0843: "Uzbek (Cyrillic)",
+    0x0860: "Kashmiri (India)",
+    0x0861: "Nepali (India)",
+    0x0c01: "Arabic (Egypt)",
+    0x0c04: "Chinese (Hong Kong SAR, PRC)",
+    0x0c07: "German (Austria)",
+    0x0c09: "English (Australian)",
+    0x0c0a: "Spanish (Modern Sort)",
+    0x0c0c: "French (Canadian)",
+    0x0c1a: "Serbian (Cyrillic)",
+    0x1001: "Arabic (Libya)",
+    0x1004: "Chinese (Singapore)",
+    0x1007: "German (Luxembourg)",
+    0x1009: "English (Canadian)",
+    0x100a: "Spanish (Guatemala)",
+    0x100c: "French (Switzerland)",
+    0x1401: "Arabic (Algeria)",
+    0x1404: "Chinese (Macau SAR)",
+    0x1407: "German (Liechtenstein)",
+    0x1409: "English (New Zealand)",
+    0x140a: "Spanish (Costa Rica)",
+    0x140c: "French (Luxembourg)",
+    0x1801: "Arabic (Morocco)",
+    0x1809: "English (Ireland)",
+    0x180a: "Spanish (Panama)",
+    0x180c: "French (Monaco)",
+    0x1c01: "Arabic (Tunisia)",
+    0x1c09: "English (South Africa)",
+    0x1c0a: "Spanish (Dominican Republic)",
+    0x2001: "Arabic (Oman)",
+    0x2009: "English (Jamaica)",
+    0x200a: "Spanish (Venezuela)",
+    0x2401: "Arabic (Yemen)",
+    0x2409: "English (Caribbean)",
+    0x240a: "Spanish (Colombia)",
+    0x2801: "Arabic (Syria)",
+    0x2809: "English (Belize)",
+    0x280a: "Spanish (Peru)",
+    0x2c01: "Arabic (Jordan)",
+    0x2c09: "English (Trinidad)",
+    0x2c0a: "Spanish (Argentina)",
+    0x3001: "Arabic (Lebanon)",
+    0x3009: "English (Zimbabwe)",
+    0x300a: "Spanish (Ecuador)",
+    0x3401: "Arabic (Kuwait)",
+    0x3409: "English (Philippines)",
+    0x340a: "Spanish (Chile)",
+    0x3801: "Arabic (U.A.E.)",
+    0x380a: "Spanish (Uruguay)",
+    0x3c01: "Arabic (Bahrain)",
+    0x3c0a: "Spanish (Paraguay)",
+    0x4001: "Arabic (Qatar)",
+    0x400a: "Spanish (Bolivia)",
+    0x440a: "Spanish (El Salvador)",
+    0x480a: "Spanish (Honduras)",
+    0x4c0a: "Spanish (Nicaragua)",
+    0x500a: "Spanish (Puerto Rico)",
+    0xf0ff: "HID (Vendor Defined 1)",
+    0xf4ff: "HID (Vendor Defined 2)",
+    0xf8ff: "HID (Vendor Defined 3)",
+    0xfcff: "HID (Vendor Defined 4)",
+}
+
 # Table 9-15. String Descriptor Zero, Specifying Languages Supported by the Dev
 StringDescriptorZero = (
     #&2B{}H"
     (1, "bLength", None),                   # Size of this descriptor
     (1, "bDescriptorType", DescriptorType), # STRING Descriptor Type
-    (0, "wLANGID", None),                   # LANGID code zero
+    (0, "wLANGID", LangID),                 # LANGID code zero
     # Variable length with at least one language specified
 )
 
@@ -254,122 +403,173 @@ StringDescriptor = (
     #&2B{}H"
     (1, "bLength", None),                   # Size of this descriptor
     (1, "bDescriptorType", DescriptorType), # STRING Descriptor Type
-    (0, "bString", "utf-16-le"),            # u16 encoded UNICODE string
+    (0, "bString", u16string),              # u16 encoded UNICODE string
     # Variable length with at least one character specified
 )
 
-def string_descriptor(bytes):
-    bytes.decode(encoding="utf-16-le")
+# Table 4.2 DFU Functional Descriptor
+DfuDescriptor = (
+    (1, "bLength", None),                   # Size of this descriptor
+    (1, "bDescriptorType", DescriptorType), # DFU FUNCTIONAL descriptor type 21h
+    (1, "bmAttributes", (                   # Bit mask DFU attributes
+        (4,8, "reserved", 0),
+        (3,4, "bitWillDetach", tf),             # detach-attach on DFU_DETACH
+        (2,3, "bitManifestationTolerant", tf),  # must see bus reset if false
+        (1,2, "bitCanUpload", tf),              # upload capable 
+        (0,1, "bitCanDnload", tf))),            # download capable
+    (2, "wDetachTimeOut", None),            # ms delay after DFU_DETACH
+    (2, "wTransferSize", None),             # Max bytes per control-write
+    (2, "bcdDFUVersion", bcd),              # version of DFU Specification
+)
 
-def descriptor_data(data):
-    print(data)
+def descriptor_data(data, request):
+    '''
+    >>> # test vectors
+    >>> descriptor_data([4, 3, 9, 4], {"Index": 0})
+    {'bLength': 4, 'bDescriptorType': 'STRING', 'bString': ['English (United States)']}
+    >>> descriptor_data([18,1, 16,1,0,0,0,0,0x34,0x12,0xcc,0xde,
+    ...     0x34,0x12,0,1,2,1], None)
+    {'bLength': 18, 'bDescriptorType': 'DEVICE', 'bcdUSB': '1.1', 'bDeviceClass': 0, 'bDeviceSubClass': 0, 'bDeviceProtocol': 0, 'bMaxPacketSize0': 0, 'idVendor': '0x1234', 'idProduct': '0xDECC', 'bcdDevice': '1234', 'iManufacturer': 0, 'iProduct': 1, 'iSerialNumber': 2, 'bNumConfigurations': 1}
+    >>> descriptor_data([12, 3, 70, 0, 111, 0, 111, 0, 115, 0, 110, 0],
+    ...     {"Index": 1})
+    {'bLength': 12, 'bDescriptorType': 'STRING', 'bString': "b'Foosn'"}
+    >>> descriptor_data([9, 2, 27, 0, 1, 1, 1, 128, 50, 9, 4, 0, 0, 0, 254,
+    ...     1, 2, 2, 9, 33, 13, 16, 39, 0, 4, 1, 1], None)
+    {'bLength': 9, 'bDescriptorType': 'CONFIGURATION', 'wTotalLength': 27, 'bNumInterfaces': 1, 'bConfigurationValue': 1, 'iConfiguration': 1, 'Self-powered': 'False', 'Remote Wakeup': 'False', 'bMaxPower': '100mA'}
+    '''
+
+    descriptor={}
+    logger.debug("Parsing descriptor")
+    if USBProtocolState.in_variable_length_data_stage():
+        logger.debug("Packet continuation")
+        USBProtocolState.set_variable_length_remaining(
+                USBProtocolState.get_variable_length_remaining()-len(data))
+        return None
     ptr=0
-    if data[0]==len(data):
-        print("Length is", data[0])
-    else:
-        print(f"Length is claiming to be {data[0]} but is actually {len(data)}")
-        if data[0]>len(data):
-            print("Warning: Actual length is less than expected")
+    if data[0]>len(data):
+        logger.debug("Shortened packet. Starting variable length transfer")
+        USBProtocolState.set_variable_length_remaining(data[0]-len(data))
     variant=data[1]
     if variant in DescriptorType:
         variant=DescriptorType[variant].title()
     else:
         variant="RFU"+str(variant)
-    # Avoid crashing due to lack of a decoder
+    # Avoid crashing due to features beyond the USB 2.0 standard set
+    # TODO add more features
     try:
-        for field in eval(variant+"Descriptor"):
-            name=field[1]
-            template=field[2]
-            if field[0]==1:
-                value=data[ptr]
-                ptr+=1
-            elif field[0]==2:
-                value=data[ptr]+(data[ptr+1]<<8)
-                ptr+=2
-            elif field[0]==0 and isinstance(field[2], str):
-                # Variable length string or list
-                value=0
-                ptr=999
-            else:
-                print(f"Error: Invalid field width {field[0]} for {name}")
-            if template==None:
-                print("None: ", end="")
-                print(field[1], value)
-            elif isinstance(template, int):
-                if value!=template:
-                    print("Warning: field does not contain expected value {}".
-                            format(template))
-                    print("int:  ", end="")
-                    print(name, value)
-                else:
-                    print("int:  ", name)
-            elif isinstance(template, (list, tuple)):
-                print("list: ", end="")
-                if isinstance(template[0], (list, tuple)):
-                    print(name, value)
-                    # move from bytes to bits
-                    for bf in template:
-                        bfvalue=((value>>(bf[0]))&((1<<(bf[1]-bf[0]))-1))
-                            #print(f"Error: Invalid bitfield width "
-                                    #"{bf[0]} for {bf[1]}")
-                        bfname=bf[2]
-                        bftemplate=bf[3]
-                        if bftemplate==None:
-                            print("bfNone: ", end="")
-                            print(bf[1], bfvalue)
-                        elif isinstance(bftemplate, int):
-                            if bfvalue!=bftemplate:
-                                print("Warning: bitfield does not contain "
-                                    "expected bfvalue {}".format(bftemplate))
-                                print("bfint:  ", end="")
-                                print(bfname, bfvalue)
-                            else:
-                                # Nothing to do as reserved fields are supressed
-                                #print("bfint:  ", bfname)
-                                pass
-                        elif isinstance(bftemplate, (list, tuple)):
-                            print("bflist: ", end="")
-                            print(bfname, bftemplate[bfvalue])
-                        elif isinstance(bftemplate, (dict)):
-                            print("bfdict: ", end="")
-                            print(bfname, bftemplate[bfvalue])
-                        elif callable(bftemplate):
-                            print("bffunc: ", end="")
-                            print(bfname, bftemplate(bfvalue))
-                        else:
-                            print("Error: No handling defined for",
-                                    type(bftemplate))
-                            print(bfname, bfvalue, bftemplate)
-                else:
-                    print(name, template[value])
-            elif isinstance(template, (dict)):
-                print("dict: ", end="")
-                print(name, template[value])
-            elif callable(template):
-                print("func: ", end="")
-                print(name, template(value))
-            elif isinstance(template, str):
-                if template=="utf-16-le":
-                    print("str:  ", end="")
-                    s=array("B", data[2:]).tobytes().decode(template)
-                    print(name, s)
-                else:
-                    print("Error: Unrecognized string encoding '{template}'")
-            else:
-                print(type(template))
-                print(name, value)
+        fields=eval(variant+"Descriptor")
     except NameError as e:
-        print(f"Error: Template {e} does not exist")
-    except TypeError:
-        print(f"Error: Incorrect type {e}")
-    except Exception as e:
-        print(f"Error: Unhandled exception {e} caught")
+        # TODO May want to downgrade this to info
+        logger.warning(f"Unsupported descriptor {variant}")
+        descriptor[variant]=data
+        return descriptor
+    for field in fields:
+        if len(field)!=3:
+            logger.critical(f"Decoder error: Invalid field descriptor in "
+                    f"{variant}")
+        size,name,template = field
+        #name=field[1]
+        #template=field[2]
+        if size==1:
+            # 8-bit parameter
+            value=data[ptr]
+            ptr+=1
+        elif size==2:
+            # 16-bit parameter
+            value=data[ptr]+(data[ptr+1]<<8)
+            ptr+=2
+        elif size==0:
+            # Variable length string or list - pack rest of packet
+            value=array("B", data[ptr:]).tobytes()
+            ptr=len(data)
+        else:
+            logger.critical(f"Decoder error: Invalid field size for {name}")
+            return descriptor
+        if template==None:
+            #logger.debug(f"default: {name}={value}")
+            descriptor[name]=value
+        elif isinstance(template, int):
+            if value!=template:
+                logger.warning(f"Field {name} contains "
+                        "{value} rather than expected {template}")
+                descriptor[name]=value
+            else:
+                # Nothing to do - reserved fields are supressed
+                #logger.debug(f"constant: {name}={value}")
+                pass
+        elif isinstance(template, (list, tuple)):
+            if isinstance(template[0], (list, tuple)):
+                # list of lists denotes bitfield
+                #logger.debug(f"bitfield: {name}={value}")
+                # move from bytes to bits
+                for bf in template:
+                    if len(bf)!=4:
+                        logger.critical(f"Decoder error: Invalid field descriptor "
+                                "in template of {name}")
+                    bfvalue=((value>>(bf[0]))&((1<<(bf[1]-bf[0]))-1))
+                        #logger.error(f"Invalid bitfield width "
+                                #"{bf[0]} for {bf[1]}")
+                    bfname=bf[2]
+                    bftemplate=bf[3]
+                    if bftemplate==None:
+                        #logger.debug(f"bfdefault: {bfname}={bfvalue}")
+                        descriptor[bfname]=bfvalue
+                    elif isinstance(bftemplate, int):
+                        if bfvalue!=bftemplate:
+                            logger.warning(f"Bitfield {bfname} contains "
+                                    "{bfvalue} rather than expected {bftemplate}")
+                        else:
+                            # Nothing to do - reserved fields are supressed
+                            #logger.debug(f"constant: {bfname}={bfvalue}")
+                            pass
+                    elif isinstance(bftemplate, (list, tuple)):
+                        #logger.debug(f"bflist: {bfname}={bftemplate[bfvalue]}")
+                        descriptor[bfname]=bftemplate[bfvalue]
+                    elif isinstance(bftemplate, (dict)):
+                        #logger.debug(f"bfdict: {bfname}={bftemplate[bfvalue]}")
+                        descriptor[bfname]=bftemplate[bfvalue]
+                    elif callable(bftemplate):
+                        #logger.debug(f"bffunc: {bfname}={bftemplate(bfvalue)}")
+                        descriptor[bfname]=bftemplate(bfvalue)
+                    else:
+                        logger.error(f"No handling found for {bfname} "
+                                "{type(bftemplate)}")
+                    try:
+                        logger.debug(f"{bfname}={descriptor[bfname]}")
+                    except:
+                        pass
+            else:
+                # Normal list so index it
+                #logger.debug(f"list: {name}={template[value]}")
+                descriptor[name]=template[value]
+        elif isinstance(template, (dict)):
+            #logger.debug(f"dict: {name}={template[value]}")
+            descriptor[name]=template[value]
+        elif callable(template):
+            if template==u16string:
+                descriptor[name]=template(value, request["Index"]==0)
+            else:
+                descriptor[name]=template(value)
+        else:
+            logger.error(f"Unhandled type '{type(template)}' for {name}")
+        try:
+            logger.debug(f"{name}={descriptor[name]}")
+        except:
+            pass
+
     if data[0]<len(data):
         # Recursion: the easy way to handle packets with multiple descriptors
-        descriptor_data(data[data[0]:])
+        new=descriptor_data(data[data[0]:], request)
+        #print("new: {new}\nold:{descriptor}")
+        if isinstance(new, list):
+            # Insert new at head of existing list
+            new.insert(0, descriptor)
+            return new
+        else:
+            # Create new list with 2 dict as entries
+            return [descriptor, new]
+    return descriptor
 
 if __name__ == "__main__":
-    # test vectors
-    descriptor_data([18,1, 16,1,0,0,0,0,0x34,0x12,0xcc,0xde,0x34,0x12,0,1,2,1])
-    descriptor_data([14, 3, 70, 0, 111, 0, 111, 0, 115, 0, 110, 0, 0, 0])
-    descriptor_data([9, 2, 27, 0, 1, 1, 1, 128, 50, 9, 4, 0, 0, 0, 254, 1, 2, 2, 9, 33, 13, 16, 39, 0, 4, 1, 1])
+    import doctest
+    doctest.testmod()
