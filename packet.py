@@ -56,26 +56,29 @@ from array import array
 import inspect
 import fileinput
 import pprint
+import logging
 import sys
 import re
 from explainusb.descriptors import descriptor_data
 
-# Use cocotb logging. This module could be made to stand-alone by using only
-# the built in logging module instead. The color routines simply check if
-# stdout is a tty much as 'ls --color' does
-from cocotb.log import SimLog
-from cocotb.utils import want_color_output
-import cocotb.ANSI as ANSI
-import logging
-
-logger = SimLog("cocotb.usb.explain")
-logger.setLevel(logging.DEBUG)
+# Use cocotb logging if available. Use the built in logging module otherwise.
+# The color routines check if stdout is a tty.
 SAME_COLOR=''
 DIFF_COLOR=''
-if want_color_output():
-    SAME_COLOR=ANSI.COLOR_INFO
-    DIFF_COLOR=ANSI.COLOR_ERROR
+try:
+    from cocotb.log import SimLog
+    from cocotb.utils import want_color_output
+    import cocotb.ANSI as ANSI
+    logger = SimLog("cocotb.usb.explain")
+    if want_color_output():
+        SAME_COLOR=ANSI.COLOR_INFO
+        DIFF_COLOR=ANSI.COLOR_ERROR
+except ImportError:
+    logger = logging
 
+logger.setLevel(logging.DEBUG)
+
+# Create a pretty printer object to display descriptors as structures.
 if sys.version_info >= (3, 8):
     pp=pprint.PrettyPrinter(sort_dicts=False)
 else:

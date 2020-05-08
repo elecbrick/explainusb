@@ -14,45 +14,54 @@ support. Routines are provided to show details of what was received and
 to show differences in packet fields from what was expected.
 
 ### Environment:
-For maximum flexibility, this module works with stand-alone or with cocotb_usb.
+For maximum flexibility, this module works stand-alone reading vcd signal dump
+files or with a simulator using [cocotb](https://docs.cocotb.org/en/latest/) and
+[cocotb_usb](https://github.com/antmicro/usb-test-suite-cocotb-usb).
 
 ### Design Philosophy:
-Mismatch handling can give a warning, an error or be fatal.
-Simulation should be allowed to proceed and not aborted just because
-the client gave a different response than expected.
+No exceptions are thrown from this code.  Violations encountered while decoding
+will issue a message through the logging system. These logs will indicate the
+severity.  A mismatch between actual and expected results will result in an
+error message.  It is left to the application to determine whether to abort or
+proceede when an error is encountered.  Simulation should not be aborted just
+because a slightly different response was received than was expected.
 
 ## Modules:
 ### explainusb
-The Analyze class handles stream state including end point management and
-remembering the transfer state of endpoint 0 in order to provide correct
-decoding of data packets.
+The Analyze class maintains stream state by monitoring the bidirectional packet
+flow in order to provide correct decoding of data packets as packet content
+is dependent on the state of the connection.
+
+#### Usage:
+```Python
+from explainusb import Analyze
+...
+def from_host_to_device:
+    # Update flow state on outgoing packet:
+    Analyze.sent(packet)
+    ...
+
+def from_device_to_host:
+    # Incoming packet:
+    Analyze.received(actual)
+    ...
+
+def discrepency_detected:
+    # If the received packet is not the same as the expected one, this function
+    # can show each field in the recevied and expected packets and highlight
+    # any differences.
+    Analyze.explain(actual, expected)
+    ...
+```
+
 ### explainusb.packet
 Packet: May be initialized by passing:
 1. A string of JK characters starting with SYNC and ending with EOP pattern
-2. A pair of strings of 01 characters for D+/D-
+2. A pair of strings or lists of '0','1' characters or 0,1 digits for D+/D-
 3. A list of bytes, the content between but excluding SYNC and EOP
+For example:
+```Python
+"
 ### explainusb.descriptor
 Standard descriptors are supported along with a few others at the moment.
 In particular, HID and mass storage are works in progress.
-
-## Usage:
-```Python
-from explainusb import Analyze
-```
-
-In order to decode incomming packets correctly, outgoing packets should call:
-```Python
-    Analyze.sent(packet)
-```
-
-Likewise, all ingoing packets should call:
-```Python
-    Analyze.received(actual)
-```
-
-If the received packet is not the same as the expected one, this last function
-show each field in the recevied and expected packets and highlights the
-differences.
-```Python
-    Analyze.explain(actual, expected)
-```

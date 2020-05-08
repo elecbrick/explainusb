@@ -53,9 +53,7 @@ Simulation should be allowed to proceed and not aborted just because
 the client gave a different response than expected.
 ------------------------------------------------------------------- '''
 
-from explainusb.explain import USBPacket, logger
-#import explainusb.packets
-#import explainusb.descriptors
+from explainusb.packet import USBPacket, logger
 
 class Analyze:
     # USB State: Last packet sent, Expected response remaining
