@@ -28,13 +28,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 '''
 
 
-from cocotb.log import SimLog
 import logging
 from array import array
 from struct import unpack
 
-logger = SimLog("cocotb.usb.descriptors")
-#logger.setLevel(logging.DEBUG)
+try:
+    from cocotb.log import SimLog
+    logger = SimLog("cocotb.usb.descriptors")
+    #logger.setLevel(logging.DEBUG)
+except ImportError:
+    logger = logging
 
 class USBProtocolState():
     # A control pipe may have a variable-length data phase in which the host
