@@ -68,7 +68,7 @@ passing:
 2. A pair of strings or lists of '0','1' characters or 0,1 digits for D+/D-
 3. A list of bytes, the content between but excluding SYNC and EOP
 
-For example, the following are all equivalent initializers:
+For example, the following are all equivalent initializers for an ACK packet:
 ```Python
     USBPacket("KJKJKJKKJJKJJKKK__J")
     USBPacket(("0101010011011000001", "1010101100100111000"))
@@ -76,7 +76,15 @@ For example, the following are all equivalent initializers:
 	  (1,0,1,0,1,0,1,1,0,0,1,0,0,1,1,1,0,0,0,)))
     USBPacket([210])
 ```
-and each one creates an ACK packet.  
+
+## Displaying the packet
+Two methods of displaying the packet contents are provided. These will be
+invoked automatically when logging is enabled at the DEBUG level.
+- The `summarize()` method returns a short description such as ACK or
+GET_DESCRIPTOR.
+- The `__str__` method gives the details of a protocol packet so that the
+`print()` function can display the contents of a packet with no conversion
+necessary.
 
 ### explainusb.descriptor
 Standard descriptors are supported along with a few others at the moment.

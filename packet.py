@@ -74,6 +74,7 @@ except ImportError:
 
 
 # Create a pretty printer object to display descriptors as structures.
+# Leave list unsorted if the option is available.
 if sys.version_info >= (3, 8):
     pp=pprint.PrettyPrinter(sort_dicts=False)
 else:
