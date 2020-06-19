@@ -265,7 +265,7 @@ class USBPacket():
         '''
         if self.error:
             # Return the error itself along with the PID if present
-            return str(self.error)+(' '+str(self.pid) if pid in self else '')
+            return str(self.error)+' '+self.pid
         out=str(self.pid)
         for f in self.fields:
             if f=="PID" or f=="CRC5" or f=="CRC16":
@@ -336,15 +336,21 @@ class USBPacket():
                                     else NONEXISTENT)
                             message+=(SAME_COLOR if d[f]==other else DIFF_COLOR)
                             message+=("{:20} {:20} {}\n".format(d[f], other, f))
+                elif isinstance(self.descriptor, DecodeError):
+                    message+=DIFF_COLOR
+                    message+=("{:20} {:20} {}\n".format(NONEXISTENT, '',
+                        self.descriptor))
                 else:
-                    for f in self.descriptor:
+                    d = self.descriptor
+                    for f in d:
                         other=(expected.descriptor[f] if hasattr(expected,
                                 'descriptor') and f in expected.descriptor
                                 else NONEXISTENT)
-                        message+=(SAME_COLOR if self.descriptor[f]==other
-                                else DIFF_COLOR)
-                        message+=("{:20} {:20} {}\n".format(self.descriptor[f],
-                                other, f))
+                        message+=(SAME_COLOR if d[f]==other else DIFF_COLOR)
+                        try:
+                            message+=("{:20} {:20} {}\n".format(d[f], other, f))
+                        except:
+                            pass
             logger.error(message)
         return False
 

@@ -110,22 +110,46 @@ TestModeSelectors = {
 
 def usbVer(w):
     # 0x0100 -> 1.0 and 0x0210 -> 2.1 (skip leading and trailing zero)
+    ''' Convert BCD USB Version to official format. In particular, leading
+    and trailing zeros are to be suppressed from the fixed point value:
+    >>> usbVer(0x0200)
+    '2.0'
+    >>> usbVer(0x0201)
+    '2.01'
+    >>> usbVer(0x0210)
+    '2.1'
+    '''
     return f'{w>>8:x}.'+(f'{((w>>4)%16):x}' if w&15==0 else f'{(w%256):02x}')
 
 def hex4(w):
+    ''' Convert 16-bit word to 4-digit hex string with leading '0x'
+    >>> hex4(0)
+    '0x0000'
+    >>> hex4(0xffff)
+    '0xFFFF'
+    '''
     return f'0x{w:04X}'
 
 def bcd(w):
+    ''' Convert 16-bit BCD word to 4-digit string
+    >>> bcd(0)
+    '0000'
+    >>> bcd(0x1234)
+    '1234'
+    '''
     return f'{w:04X}'
 
 def flag(b):
-    return str(b!=0)
+    ''' Turn a single bit value into True/False
+    >>> flag(0)
+    False
+    >>> flag(1)
+    True
+    '''
+    return True if b else False
 
 def mA(s):
     return f'{s*2}mA'
-
-def tf(b):
-    return True if b else False
 
 def u16string(s, zero):
     # String descriptor zero returns a different value than all others
@@ -416,10 +440,10 @@ DfuDescriptor = (
     (1, "bDescriptorType", DescriptorType), # DFU FUNCTIONAL descriptor type 21h
     (1, "bmAttributes", (                   # Bit mask DFU attributes
         (4,8, "reserved", 0),
-        (3,4, "bitWillDetach", tf),             # detach-attach on DFU_DETACH
-        (2,3, "bitManifestationTolerant", tf),  # must see bus reset if false
-        (1,2, "bitCanUpload", tf),              # upload capable 
-        (0,1, "bitCanDnload", tf))),            # download capable
+        (3,4, "bitWillDetach", flag),           # detach-attach on DFU_DETACH
+        (2,3, "bitManifestationTolerant", flag),# must see bus reset if false
+        (1,2, "bitCanUpload", flag),            # upload capable 
+        (0,1, "bitCanDnload", flag))),          # download capable
     (2, "wDetachTimeOut", None),            # ms delay after DFU_DETACH
     (2, "wTransferSize", None),             # Max bytes per control-write
     (2, "bcdDFUVersion", bcd),              # version of DFU Specification
@@ -438,7 +462,7 @@ def descriptor_data(data, request):
     {'bLength': 12, 'bDescriptorType': 'STRING', 'bString': "b'Foosn'"}
     >>> descriptor_data([9, 2, 27, 0, 1, 1, 1, 128, 50, 9, 4, 0, 0, 0, 254,
     ...     1, 2, 2, 9, 33, 13, 16, 39, 0, 4, 1, 1], None)
-    {'bLength': 9, 'bDescriptorType': 'CONFIGURATION', 'wTotalLength': 27, 'bNumInterfaces': 1, 'bConfigurationValue': 1, 'iConfiguration': 1, 'Self-powered': 'False', 'Remote Wakeup': 'False', 'bMaxPower': '100mA'}
+    [{'bLength': 9, 'bDescriptorType': 'CONFIGURATION', 'wTotalLength': 27, 'bNumInterfaces': 1, 'bConfigurationValue': 1, 'iConfiguration': 1, 'Self-powered': 'False', 'Remote Wakeup': 'False', 'bMaxPower': '100mA'}, {'bLength': 9, 'bDescriptorType': 'INTERFACE', 'bInterfaceNumber': 0, 'bAlternateSetting': 0, 'bNumEndpoints': 0, 'bInterfaceClass': 254, 'bInterfaceSubClass': 1, 'bInterfaceProtocol': 2, 'iInterface': 2}, {'bLength': 9, 'bDescriptorType': 'DFU', 'bitWillDetach': True, 'bitManifestationTolerant': True, 'bitCanUpload': False, 'bitCanDnload': True, 'wDetachTimeOut': 10000, 'wTransferSize': 1024, 'bcdDFUVersion': '0101'}]
     '''
 
     descriptor={}
@@ -457,7 +481,7 @@ def descriptor_data(data, request):
         variant=DescriptorType[variant].title()
     else:
         variant="RFU"+str(variant)
-    # Avoid crashing due to features beyond the USB 2.0 standard set
+    # Avoid crashing due to unrecognized extenstions
     # TODO add more features
     try:
         fields=eval(variant+"Descriptor")
